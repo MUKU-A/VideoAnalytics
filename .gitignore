@@ -1,0 +1,48 @@
+# =====================
+# Python 基本
+# =====================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+venv/
+
+# =====================
+# OS / Editor
+# =====================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# =====================
+# 大容量データ（重要）
+# =====================
+
+# 元動画（絶対にGitHubに載せない）
+data/raw_videos/
+
+# project内の動画
+data/projects/**/video/
+
+# 中間生成データ（必要なら個別に復元可能）
+data/projects/**/trajectories/
+data/projects/**/features/
+data/projects/**/logs/
+
+# 結果画像（論文用に残したい場合は除外を外す）
+data/results/
+
+# =====================
+# 一時ファイル
+# =====================
+*.tmp
+*.log
+
+# =====================
+# モデルファイル（YOLOなど）
+# =====================
+*.pt
+*.onnx
