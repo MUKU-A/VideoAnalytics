@@ -11,9 +11,13 @@ import math
 # ==========================================
 # 1. ユーザー設定
 # ==========================================
-TARGET_VIDEO_NAME = "asagaya_251213_05.mp4"
+TARGET_VIDEO_NAME = "asagaya_251213_60.mp4"
 FPS = 30
 SMOOTHING_WINDOW = 5
+
+# --- 可視化設定（動作確認用） ---
+PLOT_MAX_IMAGES = 500       # プロットする最大画像枚数（動作確認用）
+FRAME_STEP = 3              # FrameSamplingのFRAME_STEPと同じ値
 
 # --- ID再結合パラメータ（研究向け安全設定） ---
 MAX_FRAME_GAP = 3           # 最大フレーム欠損
@@ -165,12 +169,18 @@ def main():
     out_cols = ['frame', 'new_track_id', 'x_meter', 'y_meter', 'vx', 'vy', 'speed', 'direction']
     df_out = df[out_cols].sort_values(['new_track_id', 'frame'])
 
-    csv_path = os.path.join(output_dir, "trajectory_ver2.csv")
+    csv_path = os.path.join(output_dir, "trajectory.csv")
     df_out.to_csv(csv_path, index=False)
 
     # ======================================
-    # 可視化
+    # 可視化（動作確認用：最初のPLOT_MAX_IMAGES枚のみ）
     # ======================================
+    # フレーム番号の上限を計算（画像枚数 × FRAME_STEP）
+    max_frame_for_plot = PLOT_MAX_IMAGES * FRAME_STEP
+    df_plot = df_out[df_out['frame'] < max_frame_for_plot]
+    
+    print(f"可視化: 最初の{PLOT_MAX_IMAGES}枚分（frame < {max_frame_for_plot}）のデータをプロット")
+    
     fig, ax = plt.subplots(figsize=(14, 14))
 
     if os.path.exists(calib_img_path):
@@ -178,11 +188,11 @@ def main():
         bg = cv2.cvtColor(bg, cv2.COLOR_BGR2RGB)
         ax.imshow(bg, extent=[0, real_w, 0, real_h], alpha=0.6)
 
-    ids = df_out['new_track_id'].unique()
+    ids = df_plot['new_track_id'].unique()
     colors = plt.cm.tab20(np.linspace(0, 1, len(ids)))
 
     for i, tid in enumerate(ids):
-        d = df_out[df_out['new_track_id'] == tid]
+        d = df_plot[df_plot['new_track_id'] == tid]
 
         y_plot = real_h - d['y_meter']
 
@@ -196,13 +206,13 @@ def main():
         )
 
 
-    ax.set_title("Trajectory (ID Reconnected)", fontsize=16)
+    ax.set_title(f"Trajectory (ID Reconnected) - First {PLOT_MAX_IMAGES} images", fontsize=16)
     ax.set_xlabel("X (m)")
     ax.set_ylabel("Y (m)")
     ax.set_aspect('equal')
     ax.grid(alpha=0.3)
 
-    img_path = os.path.join(output_dir, "trajectory_ver2.png")
+    img_path = os.path.join(output_dir, "trajectory.png")
     plt.tight_layout()
     plt.savefig(img_path, dpi=150)
     plt.close()
