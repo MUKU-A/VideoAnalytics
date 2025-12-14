@@ -10,7 +10,7 @@ import re
 # ==========================================
 # 対象とする動画ファイル名 (data/raw_videos 内にあるものと仮定)
 # ※ 01_FrameSampling で使用したものと同じ名前にしてください
-TARGET_VIDEO_NAME = "oimachi_251113_2.mp4"
+TARGET_VIDEO_NAME = "asagaya_251213_05.mp4"
 
 # プレビュー表示時のスケール（1メートルあたり何ピクセルで表示するか）
 # これが小さいとプレビュー画像が小さくなりすぎます
@@ -226,21 +226,60 @@ def main():
 
     print("\n変換行列を計算しました。")
 
-    # 4. 変換結果の確認 (プレビュー)
-    # プレビュー用に、メートルをピクセルにスケールアップした行列を作る
-    # 例: 5メートル -> 500ピクセル
-    dst_pts_preview = dst_pts_meter * PREVIEW_SCALE_PX_PER_METER
+    # 4. 変換結果の確認 (プレビュー) - 選択範囲外も含む
+    # 元画像の四隅をホモグラフィ変換して、必要な出力範囲を計算
+    img_h, img_w = img.shape[:2]
+    img_corners = np.float32([
+        [0, 0],
+        [img_w, 0],
+        [img_w, img_h],
+        [0, img_h]
+    ]).reshape(-1, 1, 2)
+    
+    # 四隅を変換（メートル座標系）
+    transformed_corners = cv2.perspectiveTransform(img_corners, H_meter)
+    transformed_corners = transformed_corners.reshape(-1, 2)
+    
+    # 変換後の座標の範囲を取得
+    x_min_m = transformed_corners[:, 0].min()
+    x_max_m = transformed_corners[:, 0].max()
+    y_min_m = transformed_corners[:, 1].min()
+    y_max_m = transformed_corners[:, 1].max()
+    
+    # キャリブレーション領域も含める
+    x_min_m = min(x_min_m, 0)
+    x_max_m = max(x_max_m, real_width)
+    y_min_m = min(y_min_m, 0)
+    y_max_m = max(y_max_m, real_height)
+    
+    # プレビュー用のサイズ（ピクセル）
+    preview_w = int((x_max_m - x_min_m) * PREVIEW_SCALE_PX_PER_METER)
+    preview_h = int((y_max_m - y_min_m) * PREVIEW_SCALE_PX_PER_METER)
+    
+    # オフセットを考慮した変換先座標
+    dst_pts_preview = np.float32([
+        [(0 - x_min_m) * PREVIEW_SCALE_PX_PER_METER, (0 - y_min_m) * PREVIEW_SCALE_PX_PER_METER],
+        [(real_width - x_min_m) * PREVIEW_SCALE_PX_PER_METER, (0 - y_min_m) * PREVIEW_SCALE_PX_PER_METER],
+        [(real_width - x_min_m) * PREVIEW_SCALE_PX_PER_METER, (real_height - y_min_m) * PREVIEW_SCALE_PX_PER_METER],
+        [(0 - x_min_m) * PREVIEW_SCALE_PX_PER_METER, (real_height - y_min_m) * PREVIEW_SCALE_PX_PER_METER]
+    ])
     H_preview = cv2.getPerspectiveTransform(src_pts, dst_pts_preview)
     
-    # 出力画像のサイズ計算
-    preview_w = int(real_width * PREVIEW_SCALE_PX_PER_METER)
-    preview_h = int(real_height * PREVIEW_SCALE_PX_PER_METER)
-    
-    # 画像変換 (鳥瞰図作成)
+    # 画像変換 (鳥瞰図作成) - 選択範囲外も含む
     warped_img = cv2.warpPerspective(img, H_preview, (preview_w, preview_h))
     
+    # キャリブレーション領域を枠で表示
+    calib_rect = np.float32([
+        [(0 - x_min_m) * PREVIEW_SCALE_PX_PER_METER, (0 - y_min_m) * PREVIEW_SCALE_PX_PER_METER],
+        [(real_width - x_min_m) * PREVIEW_SCALE_PX_PER_METER, (0 - y_min_m) * PREVIEW_SCALE_PX_PER_METER],
+        [(real_width - x_min_m) * PREVIEW_SCALE_PX_PER_METER, (real_height - y_min_m) * PREVIEW_SCALE_PX_PER_METER],
+        [(0 - x_min_m) * PREVIEW_SCALE_PX_PER_METER, (real_height - y_min_m) * PREVIEW_SCALE_PX_PER_METER]
+    ]).astype(np.int32)
+    cv2.polylines(warped_img, [calib_rect], True, (0, 255, 0), 3)
+    
     print("変換結果のプレビューを表示します。確認したら何かキーを押して閉じてください。")
-    cv2.imshow("Preview: Bird's Eye View", warped_img)
+    print(f"緑枠: キャリブレーション領域 ({real_width}m x {real_height}m)")
+    cv2.imshow("Preview: Bird's Eye View (with surrounding area)", warped_img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
@@ -255,9 +294,13 @@ def main():
     for i in range(len(src_pts_list)):
         cv2.line(points_img, tuple(src_pts_list[i]), tuple(src_pts_list[(i+1) % 4]), (0, 255, 0), 3)
     
+    # 枠なしの鳥瞰図画像を作成（後続処理用）
+    warped_img_no_frame = cv2.warpPerspective(img, H_preview, (preview_w, preview_h))
+    
     # 画像を保存（日本語パス対応）
     points_img_path = os.path.join(calibration_dir, "calibration_points.jpg")
     warped_img_path = os.path.join(calibration_dir, "calibration_warped.jpg")
+    warped_img_frame_path = os.path.join(calibration_dir, "calibration_warped_with_frame.jpg")
     
     # 4点描画画像を保存
     ret, buf = cv2.imencode('.jpg', points_img)
@@ -265,11 +308,17 @@ def main():
         buf.tofile(points_img_path)
         print(f"4点描画画像を保存しました: {points_img_path}")
     
-    # 鳥瞰図画像を保存
-    ret, buf = cv2.imencode('.jpg', warped_img)
+    # 鳥瞰図画像を保存（枠なし：後続処理用）
+    ret, buf = cv2.imencode('.jpg', warped_img_no_frame)
     if ret:
         buf.tofile(warped_img_path)
-        print(f"鳥瞰図画像を保存しました: {warped_img_path}")
+        print(f"鳥瞰図画像を保存しました（枠なし）: {warped_img_path}")
+    
+    # 鳥瞰図画像を保存（枠あり：確認用）
+    ret, buf = cv2.imencode('.jpg', warped_img)
+    if ret:
+        buf.tofile(warped_img_frame_path)
+        print(f"鳥瞰図画像を保存しました（枠あり）: {warped_img_frame_path}")
 
     # 6. JSON保存
     # numpyのデータ型はjsonで保存できないためlistに変換
@@ -278,7 +327,15 @@ def main():
         "real_width_m": real_width,
         "real_height_m": real_height,
         "src_points": src_pts_list,  # [[x,y], ...]
-        "homography_matrix": H_meter.tolist() # ピクセル -> メートルの変換行列
+        "homography_matrix": H_meter.tolist(), # ピクセル -> メートルの変換行列
+        # 鳥瞰図画像のオフセット情報（選択範囲外を含む画像用）
+        "warped_image_offset": {
+            "x_min_m": float(x_min_m),
+            "y_min_m": float(y_min_m),
+            "x_max_m": float(x_max_m),
+            "y_max_m": float(y_max_m),
+            "scale_px_per_m": PREVIEW_SCALE_PX_PER_METER
+        }
     }
     
     with open(output_json_path, 'w', encoding='utf-8') as f:

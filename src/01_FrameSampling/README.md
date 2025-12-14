@@ -8,7 +8,7 @@
 
 ```python
 TARGET_VIDEO_NAME = "動画ファイル名.mp4"  # 対象動画
-FRAME_STEP = 10                           # 保存間隔（10 = 10フレームごと）
+FRAME_STEP = 6                           # 保存間隔（10 = 10フレームごと）
 RESIZE_SCALE = 1.0                        # リサイズ倍率（1.0 = そのまま）
 ```
 

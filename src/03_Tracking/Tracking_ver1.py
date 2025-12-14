@@ -17,8 +17,8 @@ from ultralytics import YOLO
 # 設定
 # ==============================
 
-TARGET_VIDEO_NAME = "asagaya_251213_05.mp4"
-MODEL_NAME = "yolov8x.pt"
+TARGET_VIDEO_NAME = "asagaya_251213_60.mp4"
+MODEL_NAME = "yolov8s.pt"
 
 YOLO_CONF = 0.1
 YOLO_IOU = 0.9
@@ -80,28 +80,34 @@ def main():
     )
 
     print("=== ReID Tracking (BoT-SORT) ===")
+    print(f"処理フレーム数: {len(frames)}")
 
-    # BoT-SORTは track() で指定
-    results = model.track(
-        source=frames,
-        conf=YOLO_CONF,
-        iou=YOLO_IOU,
-        classes=[0],
-        tracker="botsort.yaml",
-        stream=True,
-        verbose=False
-    )
+    # 1フレームずつ処理（ファイル数が多い場合のメモリ対策）
+    for i, frame_path in enumerate(tqdm(frames, total=len(frames))):
+        # 画像を読み込み
+        img = cv2.imread(frame_path)
+        if img is None:
+            continue
 
-    for i, r in enumerate(tqdm(results, total=len(frames))):
+        # トラッキング実行（persist=True で状態を維持）
+        results = model.track(
+            source=img,
+            conf=YOLO_CONF,
+            iou=YOLO_IOU,
+            classes=[0],
+            tracker="botsort.yaml",
+            persist=True,
+            verbose=False
+        )
+
+        r = results[0]
         if r.boxes.id is None:
             continue
 
-        frame_idx = get_frame_number(frames[i])
+        frame_idx = get_frame_number(frame_path)
         boxes = r.boxes.xyxy.cpu().numpy()
         ids = r.boxes.id.cpu().numpy()
         confs = r.boxes.conf.cpu().numpy()
-
-        img = r.orig_img.copy()
 
         for box, tid, conf in zip(boxes, ids, confs):
             x1, y1, x2, y2 = map(int, box)
