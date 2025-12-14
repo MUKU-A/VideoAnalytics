@@ -7,10 +7,11 @@ import numpy as np
 # 1. ユーザー設定セクション
 # ==========================================
 # 入力する動画ファイル名 (data/raw_videos 内にあるファイルを指定)
-TARGET_VIDEO_NAME = "oimachi_251113_2.mp4" 
+TARGET_VIDEO_NAME = "asagaya_251213_05.mp4" 
 
 # 何フレームごとに保存するか (例: 5 = 5フレームに1回保存, 30 = 1秒に1回程度)
-FRAME_STEP = 10
+# スマホで撮影した動画は30fpsだったので、6フレームごとに保存する
+FRAME_STEP = 6
 
 # 画像のリサイズ倍率 (1.0 = そのまま, 0.5 = 半分)
 RESIZE_SCALE = 1.0
